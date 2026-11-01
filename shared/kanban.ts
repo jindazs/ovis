@@ -41,6 +41,10 @@ export interface KanbanCard {
   closed_at: number | null;
   /** the base branch's commit after the merge */
   merge_commit: string | null;
+  /** the card's branch tip as last seen: tells, once the branch was deleted outside the board, whether the base holds it */
+  branch_head: string | null;
+  /** closed by the board on finding its branch merged and deleted outside it, not by the close action */
+  closed_outside: boolean;
 }
 
 export interface KanbanBoard {

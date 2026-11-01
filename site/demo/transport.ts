@@ -874,7 +874,7 @@ function demoKanbanAction(action: string, body: Record<string, unknown> | undefi
     if (title === "") return error("invalid_title", "title must contain text", 400);
     const at = Date.now();
     const made = { id: crypto.randomUUID(), title, note: typeof body?.["note"] === "string" ? body["note"].trim() : "", column: "parking", created_at: at, updated_at: at, source_workspace_id: body?.["source_workspace_id"] ?? null,
-      repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null };
+      repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null, branch_head: null, closed_outside: false };
     demoKanban.push(made);
     return json({ card: made }, 201);
   }

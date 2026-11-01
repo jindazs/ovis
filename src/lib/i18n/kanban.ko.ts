@@ -35,4 +35,5 @@ export const KANBAN_KO: Record<string, string> = {
   "A new branch from the project's current branch, in a worktree of its own": "프로젝트의 현재 브랜치에서 새 브랜치를 만들어 전용 워크트리에서 작업합니다",
   "Agent to start": "시작할 에이전트",
   "Close card": "카드 닫기",
+  "Merged outside the board": "보드 밖에서 병합됨",
 };

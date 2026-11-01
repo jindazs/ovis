@@ -35,4 +35,5 @@ export const KANBAN_JA: Record<string, string> = {
   "A new branch from the project's current branch, in a worktree of its own": "プロジェクトの現在のブランチから新しいブランチを作り、専用のワークツリーで作業します",
   "Agent to start": "起動するエージェント",
   "Close card": "クローズ",
+  "Merged outside the board": "ボード外でマージ済み",
 };

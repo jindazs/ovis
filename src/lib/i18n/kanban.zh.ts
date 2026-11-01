@@ -35,4 +35,5 @@ export const KANBAN_ZH: Record<string, string> = {
   "A new branch from the project's current branch, in a worktree of its own": "从项目当前分支创建新分支，并在独立的工作树中进行",
   "Agent to start": "要启动的智能体",
   "Close card": "关闭卡片",
+  "Merged outside the board": "已在看板外合并",
 };

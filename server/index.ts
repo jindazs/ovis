@@ -1,6 +1,6 @@
 import "./adopt-legacy-env.ts";
 import { handleWorkspaceRequest } from "./workspace-routes.ts";
-import { handleKanbanRequest, kanbanDeps, KanbanStore } from "./kanban.ts";
+import { handleKanbanRequest, kanbanDeps, KanbanStore, sweepCards } from "./kanban.ts";
 import { connectionData, createCore, type SocketData } from "./core/index.ts";
 import { ClientConnectionLog } from "./client-connection-log.ts";
 import { RequestLog } from "./request-log.ts";
@@ -241,6 +241,10 @@ export function createServer(
   draftTimer.unref();
   const core = createCore({ options: { ...options, stateDir, openCodeState, orderSequence }, devices, preferences, usage, usageLogin, TYPED_SETTLE_MS, KEY_SETTLE_MS, SUBMIT_DEADLINE_MS, SUBMIT_DELAY_MS, DRAFT_CLEAR_WAIT_MS, DRAFT_CLEAR_POLL_MS });
   const { sidecar, serialize, push, logPushError, omo, claudeAgents, plans, clientSnapshot, machines, broadcastAll, collector, queueFirstMessage } = core;
+  const kanbanBoard = kanbanDeps({ queueFirstMessage, sessionChanged: () => broadcastAll({ type: "session-changed" }), shellAgents });
+  // a card merged and its branch deleted outside the board closes without the board open
+  const kanbanTimer = setInterval(() => void kanban.exclusive(() => sweepCards(kanban, kanbanBoard)).catch(() => undefined), 30_000);
+  kanbanTimer.unref();
   // started after createCore's Node probe (server/pty/sidecar.ts), which can hold the thread up to 3 s: that wait
   // would count against the read's own 2.5 s limit, and a read cut short leaves the owner unknown for 5 minutes
   identityOf(false, null);
@@ -515,7 +519,7 @@ export function createServer(
       const filesResponse = await handleFileRequest(request, url, pathname, { bridgeAuthorized, requestHost, forwarded, client, access });
       if (filesResponse) return filesResponse;
 
-      const kanbanResponse = await handleKanbanRequest(request, pathname, kanban, kanbanDeps({ queueFirstMessage, sessionChanged: () => broadcastAll({ type: "session-changed" }), shellAgents }), bunServer);
+      const kanbanResponse = await handleKanbanRequest(request, pathname, kanban, kanbanBoard, bunServer);
       if (kanbanResponse) return kanbanResponse;
 
       const workspaceResponse = await handleWorkspaceRequest(request, url, pathname, bunServer, broadcastAll, queueFirstMessage, () => {
@@ -613,6 +617,7 @@ export function createServer(
       settlePortalStartup({ ok: false, error: new Error("Server stopped before Portal startup cleanup completed") });
       core.stop(() => {
         clearInterval(draftTimer);
+        clearInterval(kanbanTimer);
         openCodeState.clear();
         void options.portal?.shutdown();
         registration?.close();

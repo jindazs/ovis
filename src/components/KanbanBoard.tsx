@@ -219,6 +219,7 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
       <p className="kanban-card-meta">
         {card.branch ? `${card.branch} → ${card.base_branch ?? ""}` : project ?? t("No project yet")}
         {card.column === "closed" && card.merge_commit && ` · ${card.merge_commit.slice(0, 7)}`}
+        {card.column === "closed" && card.closed_outside && ` · ${t("Merged outside the board")}`}
       </p>
       <div className="kanban-actions">
         {card.column === "parking" && (

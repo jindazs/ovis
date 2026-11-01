@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { closeCard, handleKanbanRequest, KanbanConflict, KanbanStore, runGit, startCard, type KanbanDeps } from "./kanban.ts";
+import { closeCard, handleKanbanRequest, KanbanConflict, KanbanStore, runGit, startCard, sweepCards, type KanbanDeps } from "./kanban.ts";
 
 // Real git in a temporary repository; herdr's worktree calls are stood in for by git itself, so the
 // user's herdr session is never touched.
@@ -132,6 +132,74 @@ describe("start and close", () => {
     const card = store.add("Twice", "", "w-main");
     await expect(startCard(store, deps, card.id, { sourceWorkspaceId: "w-main", branch: "kanban/test", requester: null })).rejects.toMatchObject({ code: "branch_exists" });
     expect(store.get(card.id)?.column).toBe("parking");
+  });
+});
+
+describe("closing what was merged outside the board", () => {
+  async function startedCard() {
+    const f = await fixture();
+    const card = f.store.add("Outside", "", "w-main");
+    const started = await startCard(f.store, f.deps, card.id, { sourceWorkspaceId: "w-main", branch: "kanban/test", requester: null });
+    f.workspaces[1]!.agent_status = "done";
+    const wt = started.card.worktree_path!;
+    writeFileSync(join(wt, "work.txt"), "done\n");
+    await git(wt, "add", "-A");
+    await git(wt, "commit", "-q", "-m", "work");
+    return { ...f, id: card.id, wt };
+  }
+
+  it("closes a card whose branch the agent merged and deleted from its worktree, and removes the worktree", async () => {
+    const { repo, store, deps, calls, id, wt } = await startedCard();
+    await git(repo, "merge", "-q", "--no-edit", "kanban/test");
+    await git(wt, "checkout", "-q", "--detach");
+    await git(repo, "branch", "-d", "kanban/test");
+    expect(await sweepCards(store, deps)).toBe(true);
+    const card = store.get(id)!;
+    expect(card.column).toBe("closed");
+    expect(card.closed_outside).toBe(true);
+    expect(card.merge_commit).toBe(await git(repo, "rev-parse", "main"));
+    expect(calls).toContain("remove w-card");
+    expect(existsSync(wt)).toBe(false);
+  });
+
+  it("closes a card whose worktree and branch were both removed, from the branch tip it last saw", async () => {
+    const { repo, store, deps, workspaces, calls, id, wt } = await startedCard();
+    await sweepCards(store, deps);
+    expect(store.get(id)?.branch_head).toBe(await git(repo, "rev-parse", "kanban/test"));
+    await git(repo, "merge", "-q", "--no-edit", "kanban/test");
+    await git(repo, "worktree", "remove", wt);
+    await git(repo, "branch", "-d", "kanban/test");
+    workspaces.splice(1, 1);
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("closed");
+    expect(calls).not.toContain("remove w-card");
+  });
+
+  it("leaves a card whose branch is still there, deleted unmerged, or whose worktree has changes", async () => {
+    const { repo, store, deps, id, wt } = await startedCard();
+    expect(await sweepCards(store, deps)).toBe(true);
+    expect(store.get(id)?.column).toBe("active");
+    await git(wt, "checkout", "-q", "--detach");
+    await git(repo, "branch", "-D", "kanban/test");
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("active");
+    await git(repo, "merge", "-q", "--no-edit", await git(wt, "rev-parse", "HEAD"));
+    writeFileSync(join(wt, "left.txt"), "x\n");
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("active");
+    rmSync(join(wt, "left.txt"));
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("closed");
+  });
+
+  it("waits while the agent works", async () => {
+    const { repo, store, deps, workspaces, id, wt } = await startedCard();
+    await git(repo, "merge", "-q", "--no-edit", "kanban/test");
+    await git(wt, "checkout", "-q", "--detach");
+    await git(repo, "branch", "-d", "kanban/test");
+    workspaces[1]!.agent_status = "working";
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("active");
   });
 });
 
