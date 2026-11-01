@@ -1,0 +1,38 @@
+/**
+ * Chinese for the keys only the work board uses: components/KanbanBoard.tsx.
+ * Register and fixed terms follow ../i18n.zh.ts; a key another feature also uses goes there.
+ */
+export const KANBAN_ZH: Record<string, string> = {
+  "Parking lot": "停车场",
+  "In progress": "进行中",
+  "Closed": "已关闭",
+  "Working": "工作中",
+  "Finished · check it": "已完成 · 需确认",
+  "Checked · waiting": "已确认 · 等待中",
+  "Workspace closed": "工作区已关闭",
+  "Close the board": "关闭看板",
+  "Columns": "列",
+  "Reading the board…": "正在读取看板…",
+  "Close each card here once it is checked: the worktree is committed and merged, then removed with its branch.": "确认后请在这里关闭卡片：工作树会被提交并合并，然后连同分支一起删除。",
+  "Nothing here.": "这里还没有内容。",
+  "No project yet": "尚未选择项目",
+  "A new idea…": "新的想法…",
+  "Idea title": "想法标题",
+  "Details for the agent (optional)": "给智能体的详细说明（可选）",
+  "Repository": "仓库",
+  "Park it": "放入停车场",
+  "Edit idea": "编辑想法",
+  "Delete this idea?": "要删除这个想法吗？",
+  "Start work": "开始工作",
+  "Move to done": "移到已完成",
+  "Back to work": "退回进行中",
+  "Close {title}?": "要关闭 {title} 吗？",
+  "Commits what is left in the worktree, merges {branch} into {base}, removes the worktree and deletes {branch}. The project's workspace stays open.": "提交工作树中剩余的更改，将 {branch} 合并到 {base}，然后删除工作树和 {branch}。项目的工作区保持打开。",
+  "Merge and close": "合并并关闭",
+  "Save idea": "保存想法",
+  "This card can't be sent to that agent.": "无法把这张卡片发送给该智能体。",
+  "Open a workspace on a git repository first: the worktree starts from it.": "请先打开一个 git 仓库的工作区：工作树将从它创建。",
+  "A new branch from the project's current branch, in a worktree of its own": "从项目当前分支创建新分支，并在独立的工作树中进行",
+  "Agent to start": "要启动的智能体",
+  "Close card": "关闭卡片",
+};

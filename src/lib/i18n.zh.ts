@@ -10,6 +10,7 @@ import { DEVICES_ZH } from "./i18n/devices.zh.ts";
 import { USAGE_ZH } from "./i18n/usage.zh.ts";
 import { UPDATES_ZH } from "./i18n/updates.zh.ts";
 import { PALETTE_ZH } from "./i18n/palette.zh.ts";
+import { KANBAN_ZH } from "./i18n/kanban.zh.ts";
 
 /**
  * Simplified Chinese for every `t("…")` in src/ that no part in lib/i18n/ holds: keys more than
@@ -263,6 +264,9 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "切换电脑",
   "Selected": "已选择",
+  // the work board's header button (App.tsx) and its title
+  "Work board": "工作看板",
+  "Work board · cards wait for you": "工作看板 · 有卡片等你处理",
 };
 
 /** The parts ZH is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
@@ -280,6 +284,7 @@ export const ZH_PARTS: Record<string, Record<string, string>> = {
   usage: USAGE_ZH,
   updates: UPDATES_ZH,
   palette: PALETTE_ZH,
+  kanban: KANBAN_ZH,
 };
 
 export const ZH: Record<string, string> = Object.assign({}, ...Object.values(ZH_PARTS));

@@ -1,0 +1,226 @@
+/* The work board: a tall sheet; one column at a time on a phone, three side by side when wide. */
+.kanban-board {
+  width: min(100%, 1180px);
+  height: min(100%, 860px);
+  max-height: none;
+}
+
+.kanban-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+  overflow-x: auto;
+}
+
+.kanban-tab {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+  background: transparent;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.kanban-tab.is-selected {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-strong);
+}
+
+.kanban-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--text-dim);
+}
+
+.kanban-count.is-alert {
+  color: var(--status-blocked);
+  font-weight: var(--fw-semibold);
+}
+
+.kanban-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.kanban-column {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.kanban-column.is-shown {
+  display: flex;
+}
+
+.kanban-column-title {
+  display: none;
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+.kanban-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kanban-new,
+.kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.kanban-new {
+  background: transparent;
+  border-style: dashed;
+}
+
+.kanban-card.needs-user {
+  border-color: var(--status-blocked);
+  box-shadow: inset 3px 0 0 var(--status-blocked);
+}
+
+.kanban-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.kanban-card-title {
+  min-width: 0;
+  color: var(--text-strong);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.kanban-card-note {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kanban-card-meta {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  overflow-wrap: anywhere;
+}
+
+.kanban-attention {
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  font-family: var(--font-ui);
+}
+
+.kanban-attention svg {
+  width: 12px;
+  height: 12px;
+}
+
+.kanban-attention.is-working {
+  color: var(--status-working);
+  border-color: var(--status-working);
+  background: var(--status-working-tint);
+}
+
+.kanban-attention.is-input,
+.kanban-attention.is-review {
+  color: var(--status-blocked);
+  border-color: var(--status-blocked);
+  background: var(--status-blocked-tint);
+}
+
+.kanban-attention.is-idle {
+  color: var(--status-done);
+  border-color: var(--status-done);
+  background: var(--status-done-tint);
+}
+
+.kanban-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.kanban-actions .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kanban-note {
+  min-height: calc(var(--control-h) * 2);
+  resize: vertical;
+  font: inherit;
+}
+
+.kanban-select {
+  width: 100%;
+}
+
+.kanban-error {
+  color: var(--danger-text);
+}
+
+.kanban-empty {
+  margin: 0;
+}
+
+/* wide: parking, in progress and done side by side; the closed tab still shows only its own list */
+@media (min-width: 900px) {
+  .kanban-body:not([data-column="closed"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .kanban-body:not([data-column="closed"]) .kanban-column:not(.kanban-column-closed) {
+    display: flex;
+  }
+
+  .kanban-body:not([data-column="closed"]) .kanban-column-title {
+    display: block;
+  }
+
+  .kanban-body[data-column="closed"] .kanban-column:not(.kanban-column-closed) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .kanban-board {
+    height: 96%;
+  }
+}

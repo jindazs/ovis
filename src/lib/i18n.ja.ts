@@ -10,6 +10,7 @@ import { DEVICES_JA } from "./i18n/devices.ja.ts";
 import { USAGE_JA } from "./i18n/usage.ja.ts";
 import { UPDATES_JA } from "./i18n/updates.ja.ts";
 import { PALETTE_JA } from "./i18n/palette.ja.ts";
+import { KANBAN_JA } from "./i18n/kanban.ja.ts";
 
 /**
  * Japanese for every `t("…")` in src/ that no part in lib/i18n/ holds: keys more than one feature
@@ -261,6 +262,9 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "PCを切り替え",
   "Selected": "選択中",
+  // the work board's header button (App.tsx) and its title
+  "Work board": "作業ボード",
+  "Work board · cards wait for you": "作業ボード · 確認待ちのカードがあります",
 };
 
 /** The parts JA is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
@@ -278,6 +282,7 @@ export const JA_PARTS: Record<string, Record<string, string>> = {
   usage: USAGE_JA,
   updates: UPDATES_JA,
   palette: PALETTE_JA,
+  kanban: KANBAN_JA,
 };
 
 export const JA: Record<string, string> = Object.assign({}, ...Object.values(JA_PARTS));

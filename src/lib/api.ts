@@ -1,6 +1,7 @@
 import { apiFetch as fetch } from "./api-request-id.ts";
 import type { PreferencesChange, SharedPreferences } from "../../shared/preferences.ts";
 import type { SeenFinish } from "../../shared/seen.ts";
+import type { KanbanBoard } from "../../shared/kanban.ts";
 import { resumeConnectionTraces } from "./connectionTrace.ts";
 import { machinePath, type BridgeHealth, type HerdrIdentity, type Machine, type MachineRoster, type SetupAction, type SetupJob, type SetupRequest } from "../../shared/machines.ts";
 import type {
@@ -947,4 +948,15 @@ export async function saveVoiceConfig(update: VoiceConfigUpdate): Promise<VoiceS
   const response = await fetch("/api/voice/config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(update) });
   if (!response.ok) throw await errorFrom("/api/voice/config", response);
   return (await response.json()) as VoiceStatus;
+}
+
+/** GET /api/kanban: the work board's cards (shared/kanban.ts), on this PC only. */
+export function fetchKanban(): Promise<KanbanBoard> {
+  return getJson<KanbanBoard>("/api/kanban");
+}
+
+/** POST /api/kanban/<action>: a card made, changed, started, closed or deleted; the answer as the route gives it. */
+export async function kanbanAction<T>(action: "cards" | "update" | "delete" | "start" | "close", body: Record<string, unknown>): Promise<T> {
+  const response = await sendJson(`/api/kanban/${action}`, "POST", body);
+  return (await response.json()) as T;
 }

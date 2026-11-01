@@ -75,6 +75,8 @@ function labelMapUses(): [key: string, file: string][] {
     ...grab("lib/workBlocks.ts", "CATEGORY_LABEL", /\["([^"]+)", "([^"]+)"\]/g),
     ...grab("lib/usage.ts", "WINDOW_LABEL", value),
     ...grab("lib/toolVerbs.ts", "VERB_LABEL", value),
+    ...grab("components/KanbanBoard.tsx", "COLUMN_LABEL", value),
+    ...grab("components/KanbanBoard.tsx", "ATTENTION_LABEL", value),
   ];
 }
 
@@ -127,6 +129,7 @@ const PART_FILES: Record<string, string[]> = {
   usage: ["components/UsageSettings.tsx", "components/UsageAccountDialog.tsx", "components/UsageLocalLogin.tsx", "components/UsageHubConnect.tsx", "components/CLIProxyLogin.tsx", "components/UsageMeters.tsx", "lib/usage.ts"],
   updates: ["components/UpdateControls.tsx", "lib/updateProgress.ts"],
   palette: ["components/CommandPalette.tsx"],
+  kanban: ["components/KanbanBoard.tsx"],
 };
 
 /** Parts in src/lib/i18n/ hold the keys only one feature uses; the base dictionary holds the rest. */

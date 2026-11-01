@@ -866,6 +866,30 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 const error = (code: string, message: string, status: number) => json({ error: { code, message } }, status);
 
+const demoKanban: Record<string, unknown>[] = [];
+function demoKanbanAction(action: string, body: Record<string, unknown> | undefined): Response {
+  const card = demoKanban.find((item) => item["id"] === body?.["id"]);
+  if (action === "cards") {
+    const title = typeof body?.["title"] === "string" ? body["title"].trim() : "";
+    if (title === "") return error("invalid_title", "title must contain text", 400);
+    const at = Date.now();
+    const made = { id: crypto.randomUUID(), title, note: typeof body?.["note"] === "string" ? body["note"].trim() : "", column: "parking", created_at: at, updated_at: at, source_workspace_id: body?.["source_workspace_id"] ?? null,
+      repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null };
+    demoKanban.push(made);
+    return json({ card: made }, 201);
+  }
+  if (!card) return error("card_not_found", "no card with that id", 404);
+  if (action === "update") {
+    for (const key of ["title", "note", "source_workspace_id"]) if (body?.[key] !== undefined) card[key] = body[key];
+    return json({ card });
+  }
+  if (action === "delete") {
+    demoKanban.splice(demoKanban.indexOf(card), 1);
+    return json({ ok: true });
+  }
+  return error("demo", "The demo has no repository to start or close work in", 409);
+}
+
 async function bodyOf(init: RequestInit | undefined, input: RequestInfo | URL): Promise<Record<string, unknown>> {
   try {
     if (init?.body) return JSON.parse(String(init.body)) as Record<string, unknown>;
@@ -1058,6 +1082,10 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
     return json({ machines: roster });
   }
   if (path === "/api/session") return json({ snapshot: readSnapshot(local) });
+  // the work board: the demo starts with an empty board and keeps parked ideas in memory; starting
+  // and closing need a real repository and herdr worktrees, which the demo has none of
+  if (path === "/api/kanban") return json({ cards: demoKanban }, 200, { "cache-control": "no-store" });
+  if (path.startsWith("/api/kanban/")) return demoKanbanAction(path.slice("/api/kanban/".length), await bodyOf(init, input));
   if (path === "/api/agents") return json(agentsFixture);
   if (path === "/api/integrations") return json({ integrations: integrationsFixture } satisfies IntegrationsResponse);
   if (path === "/api/updates") return json({ managed: false, auto_update: false, phase: "idle", current_revision: null, latest_revision: null, current_version: __APP_VERSION__, latest_version: null, available: false, checked_at: null, blocked_reason: null, error: null }, 200, { "cache-control": "no-store" });

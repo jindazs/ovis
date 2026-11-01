@@ -1,0 +1,38 @@
+/**
+ * Japanese for the keys only the work board uses: components/KanbanBoard.tsx.
+ * Register and fixed terms follow ../i18n.ja.ts; a key another feature also uses goes there.
+ */
+export const KANBAN_JA: Record<string, string> = {
+  "Parking lot": "パーキングロット",
+  "In progress": "作業中",
+  "Closed": "クローズ済み",
+  "Working": "作業中",
+  "Finished · check it": "完了 · 要確認",
+  "Checked · waiting": "確認済み · 待機中",
+  "Workspace closed": "ワークスペースは閉じています",
+  "Close the board": "ボードを閉じる",
+  "Columns": "列",
+  "Reading the board…": "ボードを読み込み中…",
+  "Close each card here once it is checked: the worktree is committed and merged, then removed with its branch.": "確認が済んだカードはここでクローズしてください。ワークツリーをコミットしてマージし、ブランチごと削除します。",
+  "Nothing here.": "ここにはまだありません。",
+  "No project yet": "プロジェクト未設定",
+  "A new idea…": "新しいアイデア…",
+  "Idea title": "アイデアのタイトル",
+  "Details for the agent (optional)": "エージェントへの詳細（任意）",
+  "Repository": "リポジトリ",
+  "Park it": "パーキングに置く",
+  "Edit idea": "アイデアを編集",
+  "Delete this idea?": "このアイデアを削除しますか？",
+  "Start work": "作業開始",
+  "Move to done": "完了へ移動",
+  "Back to work": "作業中へ戻す",
+  "Close {title}?": "{title} をクローズしますか？",
+  "Commits what is left in the worktree, merges {branch} into {base}, removes the worktree and deletes {branch}. The project's workspace stays open.": "ワークツリーに残った変更をコミットし、{branch} を {base} にマージしてから、ワークツリーを削除して {branch} を削除します。プロジェクトのワークスペースはそのまま残ります。",
+  "Merge and close": "マージしてクローズ",
+  "Save idea": "アイデアを保存",
+  "This card can't be sent to that agent.": "このカードはそのエージェントに送れません。",
+  "Open a workspace on a git repository first: the worktree starts from it.": "先にgitリポジトリのワークスペースを開いてください。ワークツリーはそこから作成されます。",
+  "A new branch from the project's current branch, in a worktree of its own": "プロジェクトの現在のブランチから新しいブランチを作り、専用のワークツリーで作業します",
+  "Agent to start": "起動するエージェント",
+  "Close card": "クローズ",
+};

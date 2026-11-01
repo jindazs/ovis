@@ -10,6 +10,7 @@ import { DEVICES_KO } from "./i18n/devices.ko.ts";
 import { USAGE_KO } from "./i18n/usage.ko.ts";
 import { UPDATES_KO } from "./i18n/updates.ko.ts";
 import { PALETTE_KO } from "./i18n/palette.ko.ts";
+import { KANBAN_KO } from "./i18n/kanban.ko.ts";
 
 /**
  * Korean for every `t("…")` in src/ that no part in lib/i18n/ holds: keys more than one feature
@@ -259,6 +260,9 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "PC 바꾸기",
   "Selected": "선택됨",
+  // the work board's header button (App.tsx) and its title
+  "Work board": "작업 보드",
+  "Work board · cards wait for you": "작업 보드 · 확인을 기다리는 카드가 있습니다",
 };
 
 /** The parts KO is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
@@ -276,6 +280,7 @@ export const KO_PARTS: Record<string, Record<string, string>> = {
   usage: USAGE_KO,
   updates: UPDATES_KO,
   palette: PALETTE_KO,
+  kanban: KANBAN_KO,
 };
 
 export const KO: Record<string, string> = Object.assign({}, ...Object.values(KO_PARTS));

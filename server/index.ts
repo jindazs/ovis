@@ -1,5 +1,6 @@
 import "./adopt-legacy-env.ts";
 import { handleWorkspaceRequest } from "./workspace-routes.ts";
+import { handleKanbanRequest, kanbanDeps, KanbanStore } from "./kanban.ts";
 import { connectionData, createCore, type SocketData } from "./core/index.ts";
 import { ClientConnectionLog } from "./client-connection-log.ts";
 import { RequestLog } from "./request-log.ts";
@@ -210,6 +211,7 @@ export function createServer(
   const devices = new DeviceStore(stateDir, merge?.devicesBlocked ?? null);
   const preferences = new PreferenceStore(stateDir);
   const seen = new SeenStore(stateDir);
+  const kanban = new KanbanStore(stateDir);
   // Chat's own rewind (#1500, never released) kept its rewinds here; nothing reads them since #1577
   try {
     rmSync(join(stateDir, "claude-rewinds.json"), { force: true });
@@ -512,6 +514,9 @@ export function createServer(
 
       const filesResponse = await handleFileRequest(request, url, pathname, { bridgeAuthorized, requestHost, forwarded, client, access });
       if (filesResponse) return filesResponse;
+
+      const kanbanResponse = await handleKanbanRequest(request, pathname, kanban, kanbanDeps({ queueFirstMessage, sessionChanged: () => broadcastAll({ type: "session-changed" }), shellAgents }), bunServer);
+      if (kanbanResponse) return kanbanResponse;
 
       const workspaceResponse = await handleWorkspaceRequest(request, url, pathname, bunServer, broadcastAll, queueFirstMessage, () => {
         // the receipt first, then the roster read that can show it: not waited for, and its failure changes no answer

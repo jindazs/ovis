@@ -1,5 +1,8 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Ellipsis, FolderOpen, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderOpen, Link, Menu, MessageSquare, PanelLeft, Search, SquareKanban, SquareTerminal, X } from "lucide-react";
+import { KanbanBoard } from "./components/KanbanBoard.tsx";
+import { cardAttention, needsUser } from "./lib/kanban.ts";
+import { useKanban } from "./lib/useKanban.ts";
 
 import type { HerdrPane } from "../shared/protocol.ts";
 import { authenticate, createTab, pairDevice, shareSeen, signOut, splitPane, zoomPane } from "./lib/api.ts";
@@ -174,6 +177,8 @@ export function App() {
     pairDevice(pairCode, deviceLabel(navigator.userAgent, navigator.maxTouchPoints ?? 0)).then(() => loadHealth()).catch(() => { /* the gate, if any, reports it */ });
   }, [locked, pairCode, auth]); // eslint-disable-line react-hooks/exhaustive-deps
   const updates = useUpdates(locked === false);
+  // the work board (components/KanbanBoard.tsx): this PC's cards, its header button marked while a card waits on the user
+  const kanban = useKanban(locked === false && auth?.role !== "watch");
   const { selectedPaneId, setSelectedPaneId, notificationViewTarget, setNotificationViewTarget, terminalPeek, setTerminalPeek, endPeek, pendingLink, linkLanded, setLinkLanded, rosterSeq, linkSince, selectionSince, rosterTick, setRosterTick, linkTick, setLinkTick } = useSelectionState({ initialLink });
   const { otherRecheck, otherRosterTick, setOtherRosterTick } = useSplitRecheck();
   const { rosterIn, pendingFile, selectionHint, setHeaderNote, note, autoSelected, setAutoSelected } = useLinkLanding({ initialLink, otherRecheck, setOtherRosterTick, pendingLink, rosterSeq, setRosterTick, linkLanded, t });
@@ -478,6 +483,9 @@ export function App() {
   // the palette's shortcut, said beside its item where a hardware keyboard is likely (a fine pointer)
   const keyboardLikely = useMediaQuery("(hover: hover) and (pointer: fine)");
   const paletteKeys = keyboardLikely ? formatKeys(shortcutDisplayKeys("palette", settings.shortcutOverrides)).join("+") : "";
+  const localSnapshot = machines.find((machine) => machine.id === "local")?.snapshot ?? null;
+  // finished work not yet closed, or an agent waiting on the user
+  const kanbanWaiting = (kanban.cards ?? []).some((card) => card.column === "done" || needsUser(cardAttention(card, localSnapshot)));
   const moreItems: RowMenuItem[] = [
     // first at every width: a phone's header has no palette button, and a touch screen no shortcut
     { id: "palette", label: t("Search panes and actions"), icon: Search, ...(paletteKeys ? { hint: paletteKeys } : {}), run: () => openPalette() },
@@ -611,6 +619,14 @@ export function App() {
             : localFreshness === "unknown"
               ? <span className="pill pill-stale" title={health ? t("The last health check failed. Last seen: herdr {version} · protocol {protocol}", { version: health.herdr.version, protocol: health.herdr.protocol }) : t("The health check failed")}>{t("Status unknown")}</span>
               : localFreshness === "unavailable" && <span className="pill pill-offline" title={t("Start herdr on this PC, or check HERDR_SOCKET.")}>{t("herdr unavailable")}</span>}
+          {locked === false && auth?.role !== "watch" && (
+            <span className="header-more">
+              <button type="button" className="icon-button header-board-button" aria-label={kanbanWaiting ? t("Work board · cards wait for you") : t("Work board")} title={kanbanWaiting ? t("Work board · cards wait for you") : t("Work board")} onClick={() => kanban.setOpen(true)}>
+                <SquareKanban />
+              </button>
+              {kanbanWaiting && <span className="header-more-dot" aria-hidden="true" />}
+            </span>
+          )}
           <span className="header-more">
             <button
               type="button"
@@ -865,6 +881,8 @@ export function App() {
           void load();
         }}
       /></MachineContext.Provider>}
+      {kanban.open && <KanbanBoard cards={kanban.cards} error={kanban.error} snapshot={localSnapshot} onReload={kanban.reload} onClose={() => kanban.setOpen(false)}
+        onOpenPane={(paneId) => { kanban.setOpen(false); selectTarget("local", paneId); void load(); }} />}
       {machineDialog && <MachineDialog updateRemote={updateRemote} machine={machineDialog === "new" ? undefined : machineDialog} onClose={closeMachineDialog} onConnected={(id) => { closeMachineDialog(); selectTarget(id, null); void load(); }} />}
       <Droplet onOpen={(machineId, paneId) => {
         // an ended pane's card outlives the pane: the refetch has dropped it, and selecting it attaches nothing

@@ -1,0 +1,38 @@
+/**
+ * Korean for the keys only the work board uses: components/KanbanBoard.tsx.
+ * Register and fixed terms follow ../i18n.ko.ts; a key another feature also uses goes there.
+ */
+export const KANBAN_KO: Record<string, string> = {
+  "Parking lot": "보관함",
+  "In progress": "진행 중",
+  "Closed": "닫힘",
+  "Working": "작업 중",
+  "Finished · check it": "완료 · 확인 필요",
+  "Checked · waiting": "확인함 · 대기 중",
+  "Workspace closed": "워크스페이스가 닫혔습니다",
+  "Close the board": "보드 닫기",
+  "Columns": "열",
+  "Reading the board…": "보드를 읽는 중…",
+  "Close each card here once it is checked: the worktree is committed and merged, then removed with its branch.": "확인한 카드는 여기서 닫으세요. 워크트리를 커밋하고 병합한 뒤 브랜치와 함께 삭제합니다.",
+  "Nothing here.": "아직 없습니다.",
+  "No project yet": "프로젝트 없음",
+  "A new idea…": "새 아이디어…",
+  "Idea title": "아이디어 제목",
+  "Details for the agent (optional)": "에이전트에게 줄 세부 내용(선택)",
+  "Repository": "저장소",
+  "Park it": "보관하기",
+  "Edit idea": "아이디어 편집",
+  "Delete this idea?": "이 아이디어를 삭제할까요?",
+  "Start work": "작업 시작",
+  "Move to done": "완료로 이동",
+  "Back to work": "진행 중으로 되돌리기",
+  "Close {title}?": "{title}을(를) 닫을까요?",
+  "Commits what is left in the worktree, merges {branch} into {base}, removes the worktree and deletes {branch}. The project's workspace stays open.": "워크트리에 남은 변경을 커밋하고 {branch}을(를) {base}에 병합한 뒤, 워크트리를 삭제하고 {branch}을(를) 삭제합니다. 프로젝트 워크스페이스는 그대로 남습니다.",
+  "Merge and close": "병합하고 닫기",
+  "Save idea": "아이디어 저장",
+  "This card can't be sent to that agent.": "이 카드는 해당 에이전트에게 보낼 수 없습니다.",
+  "Open a workspace on a git repository first: the worktree starts from it.": "먼저 git 저장소의 워크스페이스를 여세요. 워크트리는 거기서 만들어집니다.",
+  "A new branch from the project's current branch, in a worktree of its own": "프로젝트의 현재 브랜치에서 새 브랜치를 만들어 전용 워크트리에서 작업합니다",
+  "Agent to start": "시작할 에이전트",
+  "Close card": "카드 닫기",
+};
