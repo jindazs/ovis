@@ -36,4 +36,10 @@ export const KANBAN_KO: Record<string, string> = {
   "Agent to start": "시작할 에이전트",
   "Close card": "카드 닫기",
   "Merged outside the board": "보드 밖에서 병합됨",
+  "Images": "이미지",
+  "Image {n}": "이미지 {n}",
+  "Remove image {n}": "이미지 {n} 빼기",
+  "Add images": "이미지 첨부",
+  "Only PNG, JPEG, GIF or WebP images can be attached.": "PNG, JPEG, GIF, WebP 이미지만 첨부할 수 있습니다.",
+  "A card holds at most {n} images.": "카드 하나에 이미지는 최대 {n}개까지 첨부할 수 있습니다.",
 };

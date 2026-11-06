@@ -874,11 +874,13 @@ function demoKanbanAction(action: string, body: Record<string, unknown> | undefi
     if (title === "") return error("invalid_title", "title must contain text", 400);
     const at = Date.now();
     const made = { id: crypto.randomUUID(), title, note: typeof body?.["note"] === "string" ? body["note"].trim() : "", column: "parking", created_at: at, updated_at: at, source_workspace_id: body?.["source_workspace_id"] ?? null,
-      repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null, branch_head: null, closed_outside: false };
+      repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null, branch_head: null, closed_outside: false, images: [] };
     demoKanban.push(made);
     return json({ card: made }, 201);
   }
   if (!card) return error("card_not_found", "no card with that id", 404);
+  // an <img> of a card's image is read past this transport, from a server the demo has none of
+  if (action === "image") return error("demo", "The demo keeps no images", 409);
   if (action === "update") {
     for (const key of ["title", "note", "source_workspace_id"]) if (body?.[key] !== undefined) card[key] = body[key];
     return json({ card });

@@ -43,6 +43,9 @@ describe("kanban on herdr", () => {
     const post = (path: string, body: unknown) => handleKanbanRequest(new Request(`http://localhost${path}`, { method: "POST", body: JSON.stringify(body) }), path, store, deps, timeout);
 
     const made = (await (await post("/api/kanban/cards", { title: "Add a file", source_workspace_id: parent.workspace.workspace_id }))!.json()) as { card: KanbanCard };
+    // a 1x1 PNG: copied into the worktree's ignored .ovis folder, which herdr's remove takes with it
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+    expect((await post("/api/kanban/image", { id: made.card.id, data_base64: png }))!.status).toBe(201);
     const startedResponse = (await post("/api/kanban/start", { id: made.card.id, branch: "kanban/add-a-file", agent: null }))!;
     expect(startedResponse.status).toBe(200);
     const started = (await startedResponse.json()) as KanbanStarted;
@@ -50,6 +53,7 @@ describe("kanban on herdr", () => {
     expect(started.card).toMatchObject({ column: "active", base_branch: "main", branch: "kanban/add-a-file", worktree_path: join(root, "checkout") });
     expect((await sessionSnapshot()).workspaces.find((workspace) => workspace.workspace_id === started.card.workspace_id)?.worktree?.is_linked_worktree).toBeTrue();
 
+    expect(existsSync(join(root, "checkout", ".ovis", `kanban-${store.get(made.card.id)!.images[0]!.name}`))).toBeTrue();
     writeFileSync(join(root, "checkout", "added.txt"), "from the card\n");
     const closedResponse = (await post("/api/kanban/close", { id: made.card.id }))!;
     expect(closedResponse.status).toBe(200);

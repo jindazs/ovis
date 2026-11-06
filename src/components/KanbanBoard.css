@@ -192,6 +192,62 @@
   width: 100%;
 }
 
+.kanban-image-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.kanban-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kanban-thumb {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 64px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.kanban-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kanban-thumb-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-strong);
+  background: var(--bg-panel);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.kanban-thumb-remove svg,
+.kanban-add-image svg {
+  width: 14px;
+  height: 14px;
+}
+
 .kanban-error {
   color: var(--danger-text);
 }

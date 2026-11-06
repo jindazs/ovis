@@ -36,4 +36,10 @@ export const KANBAN_JA: Record<string, string> = {
   "Agent to start": "起動するエージェント",
   "Close card": "クローズ",
   "Merged outside the board": "ボード外でマージ済み",
+  "Images": "画像",
+  "Image {n}": "画像 {n}",
+  "Remove image {n}": "画像 {n} を外す",
+  "Add images": "画像を添付",
+  "Only PNG, JPEG, GIF or WebP images can be attached.": "添付できるのはPNG、JPEG、GIF、WebPの画像だけです。",
+  "A card holds at most {n} images.": "1枚のカードに添付できる画像は{n}枚までです。",
 };

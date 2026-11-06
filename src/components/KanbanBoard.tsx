@@ -7,21 +7,21 @@
  * picked by the tabs; on a wide screen the three open columns sit side by side and closed cards
  * stay behind their tab. Follows Linear's and GitHub Projects' boards, cut down to these four steps.
  */
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { Check, CircleAlert, ExternalLink, Pencil, Play, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, ImagePlus, Pencil, Play, Plus, RotateCcw, Trash2, X } from "lucide-react";
 
 import "./KanbanBoard.css";
 
-import type { KanbanCard, KanbanColumn, KanbanStarted } from "../../shared/kanban.ts";
-import { MAX_CARD_NOTE_CHARS, MAX_CARD_TITLE_CHARS } from "../../shared/kanban.ts";
+import type { KanbanCard, KanbanColumn, KanbanImage, KanbanStarted } from "../../shared/kanban.ts";
+import { MAX_CARD_IMAGES, MAX_CARD_NOTE_CHARS, MAX_CARD_TITLE_CHARS } from "../../shared/kanban.ts";
 import type { AgentKind, SessionSnapshot } from "../../shared/protocol.ts";
-import { ApiError, kanbanAction } from "../lib/api.ts";
+import { ApiError, kanbanAction, kanbanImageUrl, uploadKanbanImage } from "../lib/api.ts";
 import { cardAttention, cardPrompt, needsUser, projectWorkspaces, suggestCardBranch, type CardAttention } from "../lib/kanban.ts";
 import { firstMessageOf, newSessionLaunch } from "../lib/newSession.ts";
 import { useMachineApi } from "../lib/machineContext.tsx";
 import { useMachineSessions } from "../lib/machineSessionContext.tsx";
-import { useT } from "../lib/i18n.ts";
+import { t, useT } from "../lib/i18n.ts";
 import { useSettings } from "../lib/settings.ts";
 import { usePhoneSheetBack } from "../lib/sheetHistory.ts";
 import { AgentPicker, rememberAgent, rememberedAgent } from "./AgentPicker.tsx";
@@ -144,6 +144,7 @@ function NewCard({ projects, onAdded }: { projects: SessionSnapshot["workspaces"
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [project, setProject] = useState("");
+  const [images, setImages] = useState<File[]>([]);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,9 +154,10 @@ function NewCard({ projects, onAdded }: { projects: SessionSnapshot["workspaces"
     setPending(true);
     setError(null);
     try {
-      await kanbanAction("cards", { title, note, source_workspace_id: project || null });
-      setTitle(""); setNote(""); setOpen(false);
-      await onAdded();
+      const { card } = await kanbanAction<{ card: KanbanCard }>("cards", { title, note, source_workspace_id: project || null });
+      // the card is parked whatever happens to its images: a form left filled would park it twice
+      setTitle(""); setNote(""); setImages([]); setOpen(false);
+      try { await uploadImages(card.id, images); } finally { await onAdded(); }
     } catch (reason) { setError(said(reason)); }
     setPending(false);
   };
@@ -164,11 +166,13 @@ function NewCard({ projects, onAdded }: { projects: SessionSnapshot["workspaces"
       <input className="input" value={title} maxLength={MAX_CARD_TITLE_CHARS} placeholder={t("A new idea…")} aria-label={t("Idea title")} disabled={pending} onFocus={() => setOpen(true)} onChange={(event) => setTitle(event.target.value)} />
       {open && (
         <>
-          <textarea className="input kanban-note" value={note} maxLength={MAX_CARD_NOTE_CHARS} rows={3} placeholder={t("Details for the agent (optional)")} aria-label={t("Details")} disabled={pending} onChange={(event) => setNote(event.target.value)} />
+          <textarea className="input kanban-note" value={note} maxLength={MAX_CARD_NOTE_CHARS} rows={3} placeholder={t("Details for the agent (optional)")} aria-label={t("Details")} disabled={pending} onChange={(event) => setNote(event.target.value)}
+            onPaste={(event) => pasteImages(event, images.length, (files) => setImages((list) => [...list, ...files]), setError)} />
+          <ImageField kept={[]} added={images} disabled={pending} onAdd={(files) => setImages((list) => [...list, ...files])} onRemoveAdded={(file) => setImages((list) => list.filter((item) => item !== file))} onError={setError} />
           <span className="field-label" id={`${id}-project`}>{t("Repository")}</span>
           <ProjectSelect projects={projects} value={project} disabled={pending} labelledBy={`${id}-project`} onChange={setProject} />
           <div className="kanban-actions">
-            <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => { setOpen(false); setError(null); }}>{t("Cancel")}</button>
+            <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => { setOpen(false); setImages([]); setError(null); }}>{t("Cancel")}</button>
             <button type="submit" className="btn btn-primary" disabled={pending || !title.trim()}><Plus aria-hidden="true" />{t("Park it")}</button>
           </div>
         </>
@@ -216,6 +220,17 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
         )}
       </div>
       {card.note && <p className="kanban-card-note">{card.note}</p>}
+      {card.images.length > 0 && (
+        <ul className="kanban-images" aria-label={t("Images")}>
+          {card.images.map((image, index) => (
+            <li key={image.name}>
+              <a className="kanban-thumb" href={kanbanImageUrl(card.id, image.name)} target="_blank" rel="noopener noreferrer" aria-label={t("Image {n}", { n: index + 1 })}>
+                <img src={kanbanImageUrl(card.id, image.name)} alt="" loading="lazy" decoding="async" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="kanban-card-meta">
         {card.branch ? `${card.branch} → ${card.base_branch ?? ""}` : project ?? t("No project yet")}
         {card.column === "closed" && card.merge_commit && ` · ${card.merge_commit.slice(0, 7)}`}
@@ -254,24 +269,116 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
   );
 }
 
+/** the types the server stores; a phone's photo picker turns its HEIC into JPEG when HEIC is not among them */
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/** One at a time, in order: a card's images keep the order they were picked in. */
+async function uploadImages(cardId: string, files: File[]): Promise<void> {
+  for (const file of files) await uploadKanbanImage(cardId, file);
+}
+
+/** The files a form takes: images only, up to what the card has room for; the rest named in an error. */
+function acceptImages(files: File[], count: number, onAdd: (files: File[]) => void, onError: (message: string | null) => void): void {
+  const images = files.filter((file) => IMAGE_TYPES.includes(file.type));
+  const room = Math.max(0, MAX_CARD_IMAGES - count);
+  if (images.length > 0) onAdd(images.slice(0, room));
+  if (images.length < files.length) onError(t("Only PNG, JPEG, GIF or WebP images can be attached."));
+  else if (images.length > room) onError(t("A card holds at most {n} images.", { n: MAX_CARD_IMAGES }));
+  else onError(null);
+}
+
+/** An image pasted into the details is attached; pasted text goes in as it would. */
+function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>, count: number, onAdd: (files: File[]) => void, onError: (message: string | null) => void): void {
+  const files = Array.from(event.clipboardData.files);
+  if (files.length === 0) return;
+  event.preventDefault();
+  acceptImages(files, count, onAdd, onError);
+}
+
+/** A local file's preview, revoked once it is no longer shown. */
+function PendingThumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const made = URL.createObjectURL(file);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [file]);
+  return url === null ? null : <img src={url} alt="" />;
+}
+
+interface ImageFieldProps {
+  cardId?: string;
+  kept: KanbanImage[];
+  added: File[];
+  disabled: boolean;
+  onAdd: (files: File[]) => void;
+  onRemoveKept?: (name: string) => void;
+  onRemoveAdded: (file: File) => void;
+  onError: (message: string | null) => void;
+}
+
+/** A card's images in a form: those it has, those picked or pasted to go with it, and the picker. */
+function ImageField({ cardId, kept, added, disabled, onAdd, onRemoveKept, onRemoveAdded, onError }: ImageFieldProps) {
+  const t = useT();
+  const input = useRef<HTMLInputElement>(null);
+  const count = kept.length + added.length;
+  return (
+    <div className="kanban-image-field">
+      {count > 0 && (
+        <ul className="kanban-images" aria-label={t("Images")}>
+          {cardId !== undefined && kept.map((image, index) => (
+            <li key={image.name} className="kanban-thumb">
+              <img src={kanbanImageUrl(cardId, image.name)} alt="" />
+              <button type="button" className="kanban-thumb-remove" aria-label={t("Remove image {n}", { n: index + 1 })} disabled={disabled} onClick={() => onRemoveKept?.(image.name)}><X aria-hidden="true" /></button>
+            </li>
+          ))}
+          {added.map((file, index) => (
+            <li key={`${file.name}-${file.lastModified}-${index}`} className="kanban-thumb">
+              <PendingThumb file={file} />
+              <button type="button" className="kanban-thumb-remove" aria-label={t("Remove image {n}", { n: kept.length + index + 1 })} disabled={disabled} onClick={() => onRemoveAdded(file)}><X aria-hidden="true" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {count < MAX_CARD_IMAGES && (
+        <button type="button" className="btn btn-ghost kanban-add-image" disabled={disabled} onClick={() => input.current?.click()}><ImagePlus aria-hidden="true" />{t("Add images")}</button>
+      )}
+      <input ref={input} type="file" accept={IMAGE_TYPES.join(",")} multiple hidden onChange={(event) => {
+        acceptImages(Array.from(event.target.files ?? []), count, onAdd, onError);
+        event.target.value = "";
+      }} />
+    </div>
+  );
+}
+
 function EditCard({ card, projects, onDone, onCancel }: { card: KanbanCard; projects: SessionSnapshot["workspaces"]; onDone: () => Promise<void>; onCancel: () => void }) {
   const t = useT();
   const id = useId();
   const [title, setTitle] = useState(card.title);
   const [note, setNote] = useState(card.note);
   const [project, setProject] = useState(card.source_workspace_id ?? "");
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [added, setAdded] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kept = card.images.filter((image) => !removed.includes(image.name));
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setPending(true);
-    try { await kanbanAction("update", { id: card.id, title, note, source_workspace_id: project || null }); await onDone(); }
-    catch (reason) { setError(said(reason)); setPending(false); }
+    try {
+      await kanbanAction("update", { id: card.id, title, note, source_workspace_id: project || null });
+      for (const name of removed) await kanbanAction("image/delete", { id: card.id, name });
+      await uploadImages(card.id, added);
+      await onDone();
+    } catch (reason) { setError(said(reason)); setPending(false); }
   };
   return (
     <form className="kanban-card is-editing" onSubmit={(event) => void submit(event)}>
       <input className="input" value={title} maxLength={MAX_CARD_TITLE_CHARS} aria-label={t("Idea title")} required disabled={pending} onChange={(event) => setTitle(event.target.value)} />
-      <textarea className="input kanban-note" value={note} maxLength={MAX_CARD_NOTE_CHARS} rows={4} aria-label={t("Details")} disabled={pending} onChange={(event) => setNote(event.target.value)} />
+      <textarea className="input kanban-note" value={note} maxLength={MAX_CARD_NOTE_CHARS} rows={4} aria-label={t("Details")} disabled={pending} onChange={(event) => setNote(event.target.value)}
+        onPaste={(event) => pasteImages(event, kept.length + added.length, (files) => setAdded((list) => [...list, ...files]), setError)} />
+      <ImageField cardId={card.id} kept={kept} added={added} disabled={pending} onAdd={(files) => setAdded((list) => [...list, ...files])}
+        onRemoveKept={(name) => setRemoved((list) => [...list, name])} onRemoveAdded={(file) => setAdded((list) => list.filter((item) => item !== file))} onError={setError} />
       <span className="field-label" id={`${id}-project`}>{t("Repository")}</span>
       <ProjectSelect projects={projects} value={project} disabled={pending} labelledBy={`${id}-project`} onChange={setProject} />
       <div className="kanban-actions">

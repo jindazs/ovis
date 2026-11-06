@@ -1,7 +1,7 @@
 import { apiFetch as fetch } from "./api-request-id.ts";
 import type { PreferencesChange, SharedPreferences } from "../../shared/preferences.ts";
 import type { SeenFinish } from "../../shared/seen.ts";
-import type { KanbanBoard } from "../../shared/kanban.ts";
+import type { KanbanBoard, KanbanCard } from "../../shared/kanban.ts";
 import { resumeConnectionTraces } from "./connectionTrace.ts";
 import { machinePath, type BridgeHealth, type HerdrIdentity, type Machine, type MachineRoster, type SetupAction, type SetupJob, type SetupRequest } from "../../shared/machines.ts";
 import type {
@@ -956,7 +956,18 @@ export function fetchKanban(): Promise<KanbanBoard> {
 }
 
 /** POST /api/kanban/<action>: a card made, changed, started, closed or deleted; the answer as the route gives it. */
-export async function kanbanAction<T>(action: "cards" | "update" | "delete" | "start" | "close", body: Record<string, unknown>): Promise<T> {
+export async function kanbanAction<T>(action: "cards" | "update" | "delete" | "start" | "close" | "image/delete", body: Record<string, unknown>): Promise<T> {
   const response = await sendJson(`/api/kanban/${action}`, "POST", body);
   return (await response.json()) as T;
 }
+
+/** POST /api/kanban/image: one image added to a parked card; AttachmentTooLargeError for a file over the limit, with nothing sent. */
+export async function uploadKanbanImage(cardId: string, image: Blob): Promise<KanbanCard> {
+  assertAttachable(image);
+  const data_base64 = base64FromBytes(new Uint8Array(await image.arrayBuffer()));
+  const response = await sendJson("/api/kanban/image", "POST", { id: cardId, data_base64 });
+  return ((await response.json()) as { card: KanbanCard }).card;
+}
+
+/** GET /api/kanban/image: where a card's image is shown from. */
+export const kanbanImageUrl = (cardId: string, name: string): string => `/api/kanban/image?${new URLSearchParams({ id: cardId, name })}`;

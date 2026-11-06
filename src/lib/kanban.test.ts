@@ -4,7 +4,7 @@ import { cardAttention, cardPrompt, needsUser, projectWorkspaces, suggestCardBra
 
 const card = (patch: Partial<KanbanCard> = {}): KanbanCard => ({
   id: "0123456789abcdef", title: "Add dark mode", note: "", column: "active", created_at: 0, updated_at: 0, source_workspace_id: "w1",
-  repo_root: "/r", base_branch: "main", branch: "kanban/x", worktree_path: "/r-x", workspace_id: "w2", pane_id: "p2", agent: "claude", closed_at: null, merge_commit: null, branch_head: null, closed_outside: false,
+  repo_root: "/r", base_branch: "main", branch: "kanban/x", worktree_path: "/r-x", workspace_id: "w2", pane_id: "p2", agent: "claude", closed_at: null, merge_commit: null, branch_head: null, closed_outside: false, images: [],
   ...patch,
 });
 

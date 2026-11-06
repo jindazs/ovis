@@ -36,4 +36,10 @@ export const KANBAN_ZH: Record<string, string> = {
   "Agent to start": "要启动的智能体",
   "Close card": "关闭卡片",
   "Merged outside the board": "已在看板外合并",
+  "Images": "图片",
+  "Image {n}": "图片 {n}",
+  "Remove image {n}": "移除图片 {n}",
+  "Add images": "添加图片",
+  "Only PNG, JPEG, GIF or WebP images can be attached.": "只能附加 PNG、JPEG、GIF 或 WebP 图片。",
+  "A card holds at most {n} images.": "每张卡片最多附加 {n} 张图片。",
 };

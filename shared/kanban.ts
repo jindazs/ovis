@@ -10,6 +10,12 @@
  *  POST /api/kanban/delete { id }                                           -> { ok }
  *  POST /api/kanban/start  { id, source_workspace_id, branch, agent?, first_message?, first_message_connection? } -> KanbanStarted
  *  POST /api/kanban/close  { id }                                           -> { card }
+ *  POST /api/kanban/image  { id, data_base64 }                              -> { card }  (a parked card only)
+ *  POST /api/kanban/image/delete { id, name }                               -> { card }  (a parked card only)
+ *  GET  /api/kanban/image?id=&name=                                         -> the image's bytes
+ *
+ * A card's images are kept with the board and copied into the worktree's `.ovis/` when it starts, their
+ * paths given to the agent as `@path` mentions after the card's text, as a pasted image is.
  */
 
 /** parking: an idea; active: a worktree with an agent at work; done: waiting to be closed; closed: merged and cleaned up */
@@ -19,6 +25,14 @@ export const KANBAN_COLUMNS: readonly KanbanColumn[] = ["parking", "active", "do
 
 export const MAX_CARD_TITLE_CHARS = 200;
 export const MAX_CARD_NOTE_CHARS = 10_000;
+export const MAX_CARD_IMAGES = 10;
+
+/** One image of a card: its file name in the board's image folder, which is also its id in the routes. */
+export interface KanbanImage {
+  name: string;
+  content_type: string;
+  size: number;
+}
 
 export interface KanbanCard {
   id: string;
@@ -45,6 +59,7 @@ export interface KanbanCard {
   branch_head: string | null;
   /** closed by the board on finding its branch merged and deleted outside it, not by the close action */
   closed_outside: boolean;
+  images: KanbanImage[];
 }
 
 export interface KanbanBoard {

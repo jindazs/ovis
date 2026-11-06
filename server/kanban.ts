@@ -7,15 +7,17 @@
  * stopped is retried as it is.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { firstMessageFault } from "../shared/launch-rules.ts";
-import { KANBAN_COLUMNS, MAX_CARD_NOTE_CHARS, MAX_CARD_TITLE_CHARS, type KanbanCard, type KanbanColumn, type KanbanStarted } from "../shared/kanban.ts";
+import { KANBAN_COLUMNS, MAX_CARD_IMAGES, MAX_CARD_NOTE_CHARS, MAX_CARD_TITLE_CHARS, type KanbanCard, type KanbanColumn, type KanbanImage, type KanbanStarted } from "../shared/kanban.ts";
 import type { PendingMessage, SessionSnapshot } from "../shared/protocol.ts";
 import { MAX_LABEL_CHARS } from "../shared/labels.ts";
 import { agentFault, agentLaunch, type AgentPayload } from "./agent-launch.ts";
+import { imageType } from "./codex-images.ts";
 import { sessionSnapshot, worktreeCreate, worktreeList, worktreeRemove } from "./herdr/client.ts";
 import { badRequest, conflictResponse, errorResponse, isJsonObject, jsonResponse, readJsonObject, setRequestRoute } from "./http.ts";
+import { MAX_IMAGE_BYTES, PasteImageError, preparePasteDirectory, readImageBody } from "./paste.ts";
 import type { ShellAgentLocator } from "./shell-agent.ts";
 import { readStateDocument, writeStateDocument } from "./state-document.ts";
 
@@ -27,6 +29,15 @@ export class KanbanConflict extends Error {
 const isColumn = (value: unknown): value is KanbanColumn => typeof value === "string" && (KANBAN_COLUMNS as readonly string[]).includes(value);
 const textOrNull = (value: unknown): string | null => typeof value === "string" && value !== "" ? value : null;
 const numberOrNull = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
+
+/** the names the board gives its images: nothing a path could be built from but the file itself */
+const IMAGE_NAME = /^image-[a-f0-9-]{8,36}\.(?:png|jpg|gif|webp)$/;
+const IMAGE_EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
+
+function imageOf(value: unknown): KanbanImage | null {
+  if (!isJsonObject(value) || typeof value["name"] !== "string" || !IMAGE_NAME.test(value["name"]) || typeof value["content_type"] !== "string") return null;
+  return { name: value["name"], content_type: value["content_type"], size: numberOrNull(value["size"]) ?? 0 };
+}
 
 /** A card as stored, or null when the entry is not one. */
 function cardOf(value: unknown): KanbanCard | null {
@@ -50,17 +61,21 @@ function cardOf(value: unknown): KanbanCard | null {
     merge_commit: textOrNull(value["merge_commit"]),
     branch_head: textOrNull(value["branch_head"]),
     closed_outside: value["closed_outside"] === true,
+    images: Array.isArray(value["images"]) ? value["images"].map(imageOf).filter((image): image is KanbanImage => image !== null) : [],
   };
 }
 
 export class KanbanStore {
   private cards: KanbanCard[] = [];
   private readonly path: string;
+  /** a folder per card under it, holding the card's images */
+  private readonly imageRoot: string;
   /** a kanban.json that would not parse is kept as kanban.json.bad by the first write, never written over */
   private damaged = false;
 
   constructor(stateDir: string, private readonly now: () => number = Date.now) {
     this.path = join(stateDir, "kanban.json");
+    this.imageRoot = join(stateDir, "kanban-images");
     let read;
     try { read = readStateDocument(this.path); } catch (error) {
       // an unreadable board is not an empty one: it is kept aside by the first write, never written over
@@ -101,7 +116,7 @@ export class KanbanStore {
     const card: KanbanCard = {
       id: randomUUID(), title, note, column: "parking", created_at: at, updated_at: at, source_workspace_id: sourceWorkspaceId,
       repo_root: null, base_branch: null, branch: null, worktree_path: null, workspace_id: null, pane_id: null, agent: null, closed_at: null, merge_commit: null,
-      branch_head: null, closed_outside: false,
+      branch_head: null, closed_outside: false, images: [],
     };
     this.cards = [...this.cards, card];
     this.save();
@@ -120,6 +135,61 @@ export class KanbanStore {
   remove(id: string): void {
     this.cards = this.cards.filter((card) => card.id !== id);
     this.save();
+    rmSync(this.imageFolder(id), { recursive: true, force: true });
+  }
+
+  private imageFolder(id: string): string { return join(this.imageRoot, id); }
+
+  /** Where a card's image is, or null when the card has no image of that name. */
+  imagePath(id: string, name: string): string | null {
+    return this.get(id)?.images.some((image) => image.name === name) ? join(this.imageFolder(id), name) : null;
+  }
+
+  /** Stores one image for a card, named after the type its bytes show; a PasteImageError when they show none. */
+  addImage(id: string, dataBase64: string): KanbanCard {
+    const card = this.get(id);
+    if (!card) throw new KanbanConflict("card_not_found", "no card with that id");
+    if (card.images.length >= MAX_CARD_IMAGES) throw new KanbanConflict("too_many_images", `a card holds at most ${MAX_CARD_IMAGES} images`);
+    // the encoded length first, so an oversized body is never decoded
+    if (dataBase64.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 4) throw new PasteImageError("image_too_large", `file exceeds ${MAX_IMAGE_BYTES} bytes`, 413);
+    const data = Buffer.from(dataBase64, "base64");
+    if (data.byteLength === 0) throw new PasteImageError("empty_image", "file is empty", 400);
+    if (data.byteLength > MAX_IMAGE_BYTES) throw new PasteImageError("image_too_large", `file exceeds ${MAX_IMAGE_BYTES} bytes`, 413);
+    const type = imageType(data);
+    const extension = type === null ? undefined : IMAGE_EXTENSIONS[type];
+    if (type === null || extension === undefined) throw new PasteImageError("invalid_image", "file is not a PNG, JPEG, GIF or WebP image", 400);
+    const name = `image-${randomUUID()}.${extension}`;
+    mkdirSync(this.imageFolder(id), { recursive: true, mode: 0o700 });
+    writeFileSync(join(this.imageFolder(id), name), data, { mode: 0o600 });
+    return this.change(id, { images: [...card.images, { name, content_type: type, size: data.byteLength }] });
+  }
+
+  removeImage(id: string, name: string): KanbanCard {
+    const card = this.get(id);
+    if (!card) throw new KanbanConflict("card_not_found", "no card with that id");
+    if (!card.images.some((image) => image.name === name)) throw new KanbanConflict("image_not_found", "the card has no image of that name");
+    rmSync(join(this.imageFolder(id), name), { force: true });
+    return this.change(id, { images: card.images.filter((image) => image.name !== name) });
+  }
+
+  /**
+   * Copies a card's images into the `.ovis/` folder of its worktree, the one a pasted image goes to (it
+   * ignores itself in git, so close's `git add -A` leaves them out), and returns their paths there.
+   */
+  copyImagesTo(id: string, worktreePath: string): string[] {
+    const card = this.get(id);
+    if (!card || card.images.length === 0) return [];
+    const directory = preparePasteDirectory(worktreePath);
+    return card.images.flatMap((image) => {
+      const target = join(directory, `kanban-${image.name}`);
+      try {
+        copyFileSync(join(this.imageFolder(id), image.name), target);
+        return [target];
+      } catch (error) {
+        console.error(`kanban: cannot copy ${image.name} into the worktree (${(error as NodeJS.ErrnoException).code ?? "error"})`);
+        return [];
+      }
+    });
   }
 }
 
@@ -182,6 +252,13 @@ async function checkBranch(deps: KanbanDeps, cwd: string, branch: string): Promi
   if (exists.code === 0) throw new KanbanConflict("branch_exists", `the branch ${branch} already exists`);
 }
 
+/** An agent whose prompt rides in its arguments (`-- <prompt>`, last) with the images' mentions after that prompt. */
+function withMentions(agent: AgentPayload, mentions: string): AgentPayload {
+  const args = Array.isArray(agent.args) ? agent.args as string[] : [];
+  if (args.length < 2 || args[args.length - 2] !== "--") return agent;
+  return { ...agent, args: [...args.slice(0, -1), `${args[args.length - 1]}\n\n${mentions}`] };
+}
+
 /** A parked card becomes a worktree of its project on a new branch, with the agent started there and the card as its first message. */
 export async function startCard(store: KanbanStore, deps: KanbanDeps, id: string, request: StartRequest): Promise<KanbanStarted> {
   const card = store.get(id);
@@ -204,13 +281,16 @@ export async function startCard(store: KanbanStore, deps: KanbanDeps, id: string
     worktree_path: opened.worktree.path, workspace_id: opened.workspace.workspace_id, pane_id: opened.root_pane.pane_id, agent: null,
   });
   deps.sessionChanged();
+  const mentions = store.copyImagesTo(id, opened.worktree.path).map((path) => `@${path}`).join(" ");
   if (!request.agent) return { card: started, agent_started: false };
+  const agent = mentions === "" ? request.agent : withMentions(request.agent, mentions);
   let launchedPid: number | null = null;
-  const launched = await deps.agentLaunch(opened.root_pane.pane_id, request.agent, (pid) => { launchedPid = pid; });
+  const launched = await deps.agentLaunch(opened.root_pane.pane_id, agent, (pid) => { launchedPid = pid; });
   if (!launched.agent_started) return { card: started, agent_started: false, error: launched.error };
   started = store.change(id, { agent: request.agent.kind as string });
   if (request.firstMessage === undefined) return { card: started, agent_started: true };
-  const firstMessage = await deps.queueFirstMessage(opened.root_pane.pane_id, request.firstMessage, request.agent.kind as string, request.requester, launchedPid)
+  const text = mentions === "" ? request.firstMessage : `${request.firstMessage}\n\n${mentions}`;
+  const firstMessage = await deps.queueFirstMessage(opened.root_pane.pane_id, text, request.agent.kind as string, request.requester, launchedPid)
     .then((message) => ({ id: message.id }), (error: unknown) => ({ error: {
       code: typeof (error as { code?: unknown } | null)?.code === "string" ? (error as { code: string }).code : "first_message_not_queued",
       message: error instanceof Error ? error.message : String(error),
@@ -371,6 +451,36 @@ const kanbanError = (error: unknown): Response => error instanceof KanbanConflic
 export async function handleKanbanRequest(request: Request, pathname: string, store: KanbanStore, deps: KanbanDeps, bunServer: { timeout: (request: Request, seconds: number) => void }): Promise<Response | null> {
   if (pathname !== "/api/kanban" && !pathname.startsWith("/api/kanban/")) return null;
   setRequestRoute(pathname);
+  if (pathname === "/api/kanban/image" && request.method === "GET") {
+    const query = new URL(request.url).searchParams;
+    const card = store.get(query.get("id") ?? "");
+    const name = query.get("name") ?? "";
+    const path = card ? store.imagePath(card.id, name) : null;
+    const image = card?.images.find((item) => item.name === name);
+    if (!path || !image) return jsonResponse({ error: { code: "image_not_found", message: "no such image" } }, 404);
+    let data: Buffer;
+    try { data = readFileSync(path); } catch { return jsonResponse({ error: { code: "image_not_found", message: "no such image" } }, 404); }
+    // a name is never reused for other bytes
+    return new Response(new Uint8Array(data), { headers: { "content-type": image.content_type, "x-content-type-options": "nosniff", "cache-control": "private, max-age=31536000, immutable" } });
+  }
+  if (pathname === "/api/kanban/image") {
+    if (request.method !== "POST") return badRequest("method_not_allowed", "use POST");
+    let payload: unknown;
+    try { payload = JSON.parse(await readImageBody(request)); } catch (error) {
+      if (error instanceof PasteImageError) return jsonResponse({ error: { code: error.code, message: error.message } }, error.status);
+      return badRequest("invalid_json", "request body must be JSON");
+    }
+    if (!isJsonObject(payload) || typeof payload["id"] !== "string" || typeof payload["data_base64"] !== "string") return badRequest("invalid_image", "id and data_base64 are required strings");
+    const card = store.get(payload["id"]);
+    if (!card) return jsonResponse({ error: { code: "card_not_found", message: "no card with that id" } }, 404);
+    if (card.column !== "parking") return conflictResponse("card_started", "images are added to a parked card only");
+    try {
+      return jsonResponse({ card: store.addImage(card.id, payload["data_base64"]) }, 201);
+    } catch (error) {
+      if (error instanceof PasteImageError) return jsonResponse({ error: { code: error.code, message: error.message } }, error.status);
+      return kanbanError(error);
+    }
+  }
   if (pathname === "/api/kanban") {
     if (request.method !== "GET") return badRequest("method_not_allowed", "use GET");
     // what was merged and deleted outside the board shows closed on the next read
@@ -413,6 +523,11 @@ export async function handleKanbanRequest(request: Request, pathname: string, st
         patch.column = column;
       }
       return jsonResponse({ card: store.change(id, patch) });
+    }
+    if (pathname === "/api/kanban/image/delete") {
+      if (card.column !== "parking") return conflictResponse("card_started", "a started card keeps its images");
+      if (typeof payload["name"] !== "string") return badRequest("missing_name", "name is required");
+      return jsonResponse({ card: store.removeImage(id, payload["name"]) });
     }
     if (pathname === "/api/kanban/delete") {
       // a started card has a worktree and a branch: it leaves the board only by its close

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { KanbanCard } from "../shared/kanban.ts";
 import { closeCard, handleKanbanRequest, KanbanConflict, KanbanStore, runGit, startCard, sweepCards, type KanbanDeps } from "./kanban.ts";
 
 // Real git in a temporary repository; herdr's worktree calls are stood in for by git itself, so the
@@ -14,6 +15,9 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   if (result.code !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
   return result.stdout.trim();
 }
+
+/** the smallest PNG: a 1x1 transparent pixel */
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "ovis-kanban-"));
@@ -126,6 +130,29 @@ describe("start and close", () => {
     expect(existsSync(started.card.worktree_path!)).toBe(true);
   });
 
+  it("copies a card's images into the worktree's ignored .ovis folder and mentions them after the card's text", async () => {
+    const { store, deps, calls, workspaces } = await fixture();
+    const card = store.add("Fix the header", "", null);
+    const [image] = store.addImage(card.id, PNG.toString("base64")).images;
+    const started = await startCard(store, deps, card.id, { sourceWorkspaceId: "w-main", branch: "kanban/test", agent: { kind: "claude" }, firstMessage: "Fix the header", requester: null });
+    const copied = join(started.card.worktree_path!, ".ovis", `kanban-${image!.name}`);
+    expect(readFileSync(copied)).toEqual(PNG);
+    expect(calls).toContain(`message p-card Fix the header\n\n@${copied}`);
+    expect(await git(started.card.worktree_path!, "status", "--porcelain")).toBe("");
+
+    // an agent that takes its prompt as an argument gets the mentions there
+    const other = store.add("Codex card", "", null);
+    store.addImage(other.id, PNG.toString("base64"));
+    const launched: unknown[] = [];
+    await startCard(store, { ...deps, agentLaunch: async (_pane, agent) => { launched.push(agent.args); return { agent_started: true }; } }, other.id,
+      { sourceWorkspaceId: "w-main", branch: "kanban/codex", agent: { kind: "codex", args: ["--", "Codex card"] }, requester: null });
+    expect(launched[0]).toEqual(["--", expect.stringMatching(/^Codex card\n\n@.*\/\.ovis\/kanban-image-.*\.png$/)]);
+
+    // the worktree goes on close with the copies in it
+    workspaces[1]!.agent_status = "idle";
+    expect((await closeCard(store, deps, card.id)).column).toBe("closed");
+  });
+
   it("refuses a branch that already exists", async () => {
     const { repo, store, deps } = await fixture();
     await git(repo, "branch", "kanban/test");
@@ -222,6 +249,33 @@ describe("routes", () => {
     const deleted = await handleKanbanRequest(post("/api/kanban/delete", { id: card.id }), "/api/kanban/delete", store, deps, timeout);
     expect(deleted?.status).toBe(200);
     expect(store.list()).toEqual([]);
+  });
+
+  it("keeps a parked card's images, serves them, and lets them go with the card", async () => {
+    const { state, store, deps } = await fixture();
+    const { card } = await (await handleKanbanRequest(post("/api/kanban/cards", { title: "Idea" }), "/api/kanban/cards", store, deps, timeout))!.json() as { card: KanbanCard };
+    const added = await handleKanbanRequest(post("/api/kanban/image", { id: card.id, data_base64: PNG.toString("base64") }), "/api/kanban/image", store, deps, timeout);
+    expect(added?.status).toBe(201);
+    const [image] = ((await added!.json()) as { card: KanbanCard }).card.images;
+    expect(image).toMatchObject({ content_type: "image/png", size: PNG.byteLength });
+    expect(new KanbanStore(state).get(card.id)?.images).toEqual([image!]);
+
+    const served = await handleKanbanRequest(new Request(`http://localhost/api/kanban/image?id=${card.id}&name=${image!.name}`), "/api/kanban/image", store, deps, timeout);
+    expect(served?.headers.get("content-type")).toBe("image/png");
+    expect(Buffer.from(await served!.arrayBuffer())).toEqual(PNG);
+    const outside = await handleKanbanRequest(new Request(`http://localhost/api/kanban/image?id=${card.id}&name=../../kanban.json`), "/api/kanban/image", store, deps, timeout);
+    expect(outside?.status).toBe(404);
+
+    const text = await handleKanbanRequest(post("/api/kanban/image", { id: card.id, data_base64: Buffer.from("not an image").toString("base64") }), "/api/kanban/image", store, deps, timeout);
+    expect(text?.status).toBe(400);
+
+    const removed = await handleKanbanRequest(post("/api/kanban/image/delete", { id: card.id, name: image!.name }), "/api/kanban/image/delete", store, deps, timeout);
+    expect(((await removed!.json()) as { card: KanbanCard }).card.images).toEqual([]);
+    expect(existsSync(join(state, "kanban-images", card.id, image!.name))).toBe(false);
+
+    store.addImage(card.id, PNG.toString("base64"));
+    store.remove(card.id);
+    expect(existsSync(join(state, "kanban-images", card.id))).toBe(false);
   });
 
   it("answers no other path", async () => {
