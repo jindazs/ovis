@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { KanbanCard } from "../../shared/kanban.ts";
-import { cardAttention, cardPrompt, needsUser, projectWorkspaces, suggestCardBranch } from "./kanban.ts";
+import { cardAttention, cardProject, cardPrompt, needsUser, projectWorkspaces, suggestCardBranch } from "./kanban.ts";
 
 const card = (patch: Partial<KanbanCard> = {}): KanbanCard => ({
   id: "0123456789abcdef", title: "Add dark mode", note: "", column: "active", created_at: 0, updated_at: 0, source_workspace_id: "w1",
@@ -55,5 +55,13 @@ describe("projectWorkspaces", () => {
       { workspace_id: "c", worktree: null },
     ];
     expect(projectWorkspaces({ workspaces } as never).map((workspace) => workspace.workspace_id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("cardProject", () => {
+  it("is the workspace's name, else the repository's folder, else none", () => {
+    expect(cardProject(card(), [{ workspace_id: "w1", label: "herdr" }])).toBe("herdr");
+    expect(cardProject(card({ repo_root: "/Users/me/ovis/" }), [])).toBe("ovis");
+    expect(cardProject(card({ repo_root: null }), [])).toBeNull();
   });
 });

@@ -17,7 +17,7 @@ import type { KanbanCard, KanbanColumn, KanbanImage, KanbanStarted } from "../..
 import { MAX_CARD_IMAGES, MAX_CARD_NOTE_CHARS, MAX_CARD_TITLE_CHARS } from "../../shared/kanban.ts";
 import type { AgentKind, SessionSnapshot } from "../../shared/protocol.ts";
 import { ApiError, kanbanAction, kanbanImageUrl, uploadKanbanImage } from "../lib/api.ts";
-import { cardAttention, cardPrompt, needsUser, projectWorkspaces, suggestCardBranch, type CardAttention } from "../lib/kanban.ts";
+import { cardAttention, cardProject, cardPrompt, needsUser, projectWorkspaces, suggestCardBranch, type CardAttention } from "../lib/kanban.ts";
 import { firstMessageOf, newSessionLaunch } from "../lib/newSession.ts";
 import { useMachineApi } from "../lib/machineContext.tsx";
 import { useMachineSessions } from "../lib/machineSessionContext.tsx";
@@ -125,9 +125,6 @@ export function KanbanBoard({ cards, error, snapshot, onReload, onOpenPane, onCl
   );
 }
 
-const projectName = (projects: SessionSnapshot["workspaces"], workspaceId: string | null): string | null =>
-  projects.find((workspace) => workspace.workspace_id === workspaceId)?.label ?? null;
-
 function ProjectSelect({ projects, value, disabled, onChange, labelledBy }: { projects: SessionSnapshot["workspaces"]; value: string; disabled?: boolean; onChange: (value: string) => void; labelledBy?: string }) {
   const t = useT();
   return (
@@ -204,7 +201,7 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
     setPending(false);
   };
   const paneOpen = card.pane_id !== null && attention !== "gone";
-  const project = projectName(projects, card.source_workspace_id);
+  const project = cardProject(card, projects);
 
   if (mode === "edit") return <EditCard card={card} projects={projects} onDone={async () => { setMode("view"); await onReload(); }} onCancel={() => setMode("view")} />;
   if (mode === "start") return <StartCard card={card} projects={projects} onCancel={() => setMode("view")} onStarted={async (paneId) => { await onReload(); if (paneId) onOpenPane(paneId); }} />;
@@ -232,7 +229,8 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
         </ul>
       )}
       <p className="kanban-card-meta">
-        {card.branch ? `${card.branch} → ${card.base_branch ?? ""}` : project ?? t("No project yet")}
+        <span className="kanban-card-project">{project ?? t("No project yet")}</span>
+        {card.branch && ` · ${card.branch} → ${card.base_branch ?? ""}`}
         {card.column === "closed" && card.merge_commit && ` · ${card.merge_commit.slice(0, 7)}`}
         {card.column === "closed" && card.closed_outside && ` · ${t("Merged outside the board")}`}
       </p>

@@ -139,6 +139,12 @@
   overflow-wrap: anywhere;
 }
 
+.kanban-card-project {
+  color: var(--text-strong);
+  font-family: var(--font-ui);
+  font-weight: var(--fw-medium);
+}
+
 .kanban-attention {
   flex: 0 0 auto;
   gap: var(--space-1);

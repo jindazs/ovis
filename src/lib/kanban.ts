@@ -42,6 +42,16 @@ export function cardPrompt(card: Pick<KanbanCard, "title" | "note">): string {
 }
 
 /**
+ * The project a card belongs to: its workspace's name while that is open, else the folder of the
+ * repository it started in (the workspace closed since), else none.
+ */
+export function cardProject(card: Pick<KanbanCard, "source_workspace_id" | "repo_root">, projects: Pick<SessionSnapshot["workspaces"][number], "workspace_id" | "label">[]): string | null {
+  const label = projects.find((workspace) => workspace.workspace_id === card.source_workspace_id)?.label;
+  if (label) return label;
+  return card.repo_root?.replace(/\/+$/, "").split("/").pop() || null;
+}
+
+/**
  * The workspaces a card can start from: every one but a linked worktree (a worktree starts from the
  * main checkout). herdr names the repository of only some workspaces, so one it names none of is
  * offered too, and herdr's own refusal says when its folder is no repository.
