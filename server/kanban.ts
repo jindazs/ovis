@@ -229,7 +229,8 @@ export interface KanbanDeps {
   worktreeCreate: typeof worktreeCreate;
   worktreeList: typeof worktreeList;
   worktreeRemove: typeof worktreeRemove;
-  sessionSnapshot: () => Promise<Pick<SessionSnapshot, "workspaces">>;
+  /** the session as pages see it: a pane at rest while its turn's subagents run says `background_wait` */
+  sessionSnapshot: () => Promise<Pick<SessionSnapshot, "workspaces"> & Partial<Pick<SessionSnapshot, "panes">>>;
   agentLaunch: (paneId: string, agent: AgentPayload, launched: (pid: number) => void) => ReturnType<typeof agentLaunch>;
   queueFirstMessage: (paneId: string, text: string, kind: string, requester: string | null, launchedPid: number | null) => Promise<PendingMessage>;
   /** tell every page that workspaces changed (a worktree went) */
@@ -298,6 +299,17 @@ export async function startCard(store: KanbanStore, deps: KanbanDeps, id: string
   return { card: started, agent_started: true, first_message: firstMessage };
 }
 
+/**
+ * Whether the card's agent is still at it: its workspace or pane working, or its pane at rest while
+ * subagents or background commands its turn started still run (server/background-wait.ts), which
+ * herdr reads as done.
+ */
+function agentBusy(card: KanbanCard, snapshot: Awaited<ReturnType<KanbanDeps["sessionSnapshot"]>>): boolean {
+  const workspace = card.workspace_id ? snapshot.workspaces.find((item) => item.workspace_id === card.workspace_id) : undefined;
+  const pane = card.pane_id ? snapshot.panes?.find((item) => item.pane_id === card.pane_id) : undefined;
+  return workspace?.agent_status === "working" || pane?.agent_status === "working" || pane?.background_wait === true;
+}
+
 /** The commit message for a card's leftover changes: its title on one line. */
 const commitMessage = (card: KanbanCard): string => card.title.replace(/\s+/g, " ").trim() || card.branch || "kanban card";
 
@@ -314,9 +326,9 @@ export async function closeCard(store: KanbanStore, deps: KanbanDeps, id: string
   const { repo_root: repoRoot, base_branch: base, branch, worktree_path: worktreePath } = card;
   if (!repoRoot || !base || !branch || !worktreePath) throw new KanbanConflict("card_not_started", "this card has no worktree to close");
 
-  const workspaces = (await deps.sessionSnapshot()).workspaces;
-  const workspace = card.workspace_id ? workspaces.find((item) => item.workspace_id === card.workspace_id) : undefined;
-  if (workspace?.agent_status === "working") throw new KanbanConflict("agent_working", "the agent is still working in this worktree");
+  const snapshot = await deps.sessionSnapshot();
+  if (agentBusy(card, snapshot)) throw new KanbanConflict("agent_working", "the agent is still working in this worktree");
+  const workspace = card.workspace_id ? snapshot.workspaces.find((item) => item.workspace_id === card.workspace_id) : undefined;
 
   const branchExists = (await deps.git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`])).code === 0;
   const checkoutThere = existsSync(worktreePath);
@@ -381,7 +393,7 @@ export async function closeCard(store: KanbanStore, deps: KanbanDeps, id: string
 export async function sweepCards(store: KanbanStore, deps: KanbanDeps): Promise<boolean> {
   const started = store.list().filter((card) => card.column === "active" || card.column === "done");
   if (started.length === 0) return false;
-  let workspaces: Awaited<ReturnType<KanbanDeps["sessionSnapshot"]>>["workspaces"] | null = null;
+  let snapshot: Awaited<ReturnType<KanbanDeps["sessionSnapshot"]>> | null = null;
   let changed = false;
   for (const card of started) {
     const { repo_root: repoRoot, base_branch: base, branch, worktree_path: worktreePath } = card;
@@ -404,9 +416,9 @@ export async function sweepCards(store: KanbanStore, deps: KanbanDeps): Promise<
       }
       if (!last) continue;
       if ((await deps.git(repoRoot, ["merge-base", "--is-ancestor", last, `refs/heads/${base}`])).code !== 0) continue;
-      workspaces ??= (await deps.sessionSnapshot()).workspaces;
-      const workspace = card.workspace_id ? workspaces.find((item) => item.workspace_id === card.workspace_id) : undefined;
-      if (workspace?.agent_status === "working") continue;
+      snapshot ??= await deps.sessionSnapshot();
+      if (agentBusy(card, snapshot)) continue;
+      const workspace = card.workspace_id ? snapshot.workspaces.find((item) => item.workspace_id === card.workspace_id) : undefined;
       if (workspace) {
         await deps.worktreeRemove(workspace.workspace_id, false);
         deps.sessionChanged();
@@ -567,13 +579,13 @@ export async function handleKanbanRequest(request: Request, pathname: string, st
 }
 
 /** The board's dependencies on this PC's herdr and git. */
-export function kanbanDeps(options: { queueFirstMessage: KanbanDeps["queueFirstMessage"]; sessionChanged: () => void; shellAgents?: ShellAgentLocator }): KanbanDeps {
+export function kanbanDeps(options: { queueFirstMessage: KanbanDeps["queueFirstMessage"]; sessionChanged: () => void; shellAgents?: ShellAgentLocator; sessionSnapshot?: KanbanDeps["sessionSnapshot"] }): KanbanDeps {
   return {
     git: runGit,
     worktreeCreate,
     worktreeList,
     worktreeRemove,
-    sessionSnapshot: () => sessionSnapshot(),
+    sessionSnapshot: options.sessionSnapshot ?? (() => sessionSnapshot()),
     agentLaunch: (paneId, agent, launched) => agentLaunch(paneId, agent, launched, options.shellAgents),
     queueFirstMessage: options.queueFirstMessage,
     sessionChanged: options.sessionChanged,

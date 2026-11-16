@@ -7,6 +7,7 @@ export const KANBAN_KO: Record<string, string> = {
   "In progress": "진행 중",
   "Closed": "닫힘",
   "Working": "작업 중",
+  "Background work running": "서브에이전트 등 백그라운드 실행 중",
   "Finished · check it": "완료 · 확인 필요",
   "Checked · waiting": "확인함 · 대기 중",
   "Workspace closed": "워크스페이스가 닫혔습니다",

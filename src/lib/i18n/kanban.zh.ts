@@ -7,6 +7,7 @@ export const KANBAN_ZH: Record<string, string> = {
   "In progress": "进行中",
   "Closed": "已关闭",
   "Working": "工作中",
+  "Background work running": "子代理等后台任务运行中",
   "Finished · check it": "已完成 · 需确认",
   "Checked · waiting": "已确认 · 等待中",
   "Workspace closed": "工作区已关闭",

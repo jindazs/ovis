@@ -30,6 +30,7 @@ async function fixture() {
   await git(repo, "add", "-A");
   await git(repo, "commit", "-q", "-m", "first");
   const workspaces: { workspace_id: string; agent_status: string }[] = [{ workspace_id: "w-main", agent_status: "idle" }];
+  const panes: { pane_id: string; agent_status: string; background_wait?: true }[] = [];
   const calls: string[] = [];
   const deps: KanbanDeps = {
     git: runGit,
@@ -47,12 +48,12 @@ async function fixture() {
       calls.push(`remove ${workspaceId}`);
       return { type: "worktree_removed", workspace_id: workspaceId, path, forced: false };
     },
-    sessionSnapshot: async () => ({ workspaces }) as never,
+    sessionSnapshot: async () => ({ workspaces, panes }) as never,
     agentLaunch: async (paneId, agent) => { calls.push(`launch ${paneId} ${agent.kind as string}`); return { agent_started: true }; },
     queueFirstMessage: async (paneId, text) => { calls.push(`message ${paneId} ${text}`); return { id: "m1" } as never; },
     sessionChanged: () => calls.push("changed"),
   };
-  return { root, repo, state, store: new KanbanStore(state), deps, workspaces, calls };
+  return { root, repo, state, store: new KanbanStore(state), deps, workspaces, panes, calls };
 }
 
 describe("kanban store", () => {
@@ -79,7 +80,7 @@ describe("kanban store", () => {
 
 describe("start and close", () => {
   it("starts a worktree from the checked-out branch, then commits, merges, removes and deletes on close", async () => {
-    const { repo, store, deps, workspaces, calls } = await fixture();
+    const { repo, store, deps, workspaces, panes, calls } = await fixture();
     const card = store.add("Add a greeting", "Write hello.txt", "w-main");
     const started = await startCard(store, deps, card.id, { sourceWorkspaceId: "w-main", branch: "kanban/test", agent: { kind: "claude" }, firstMessage: "Add a greeting", requester: null });
     expect(started.card.column).toBe("active");
@@ -91,6 +92,10 @@ describe("start and close", () => {
     writeFileSync(join(started.card.worktree_path!, "hello.txt"), "hi\n");
     await expect(closeCard(store, deps, card.id)).rejects.toThrow(new KanbanConflict("agent_working", "the agent is still working in this worktree"));
     workspaces[1]!.agent_status = "done";
+    // at rest, but its subagents still run
+    panes.push({ pane_id: "p-card", agent_status: "done", background_wait: true });
+    await expect(closeCard(store, deps, card.id)).rejects.toThrow(new KanbanConflict("agent_working", "the agent is still working in this worktree"));
+    panes.length = 0;
 
     const closed = await closeCard(store, deps, card.id);
     expect(closed.column).toBe("closed");
@@ -227,6 +232,20 @@ describe("closing what was merged outside the board", () => {
     workspaces[1]!.agent_status = "working";
     await sweepCards(store, deps);
     expect(store.get(id)?.column).toBe("active");
+  });
+
+  it("waits while the agent's subagents run, though herdr reads it done", async () => {
+    const { repo, store, deps, workspaces, panes, id, wt } = await startedCard();
+    await git(repo, "merge", "-q", "--no-edit", "kanban/test");
+    await git(wt, "checkout", "-q", "--detach");
+    await git(repo, "branch", "-d", "kanban/test");
+    workspaces[1]!.agent_status = "done";
+    panes.push({ pane_id: "p-card", agent_status: "done", background_wait: true });
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("active");
+    panes.length = 0;
+    await sweepCards(store, deps);
+    expect(store.get(id)?.column).toBe("closed");
   });
 });
 

@@ -47,6 +47,7 @@ const COLUMN_LABEL: Record<KanbanColumn, string> = {
 
 const ATTENTION_LABEL: Record<CardAttention, string> = {
   working: "Working",
+  waiting: "Background work running",
   input: "Needs input",
   review: "Finished · check it",
   idle: "Checked · waiting",
@@ -249,7 +250,7 @@ function Card({ card, snapshot, projects, onReload, onOpenPane, onConfirm }: Car
               ? <button type="button" className="btn" disabled={pending} onClick={() => void run(() => kanbanAction("update", { id: card.id, column: "done" }))}><Check aria-hidden="true" />{t("Move to done")}</button>
               : <button type="button" className="icon-button" aria-label={t("Back to work")} title={t("Back to work")} disabled={pending} onClick={() => void run(() => kanbanAction("update", { id: card.id, column: "active" }))}><RotateCcw aria-hidden="true" /></button>}
             {card.column === "done" && (
-              <button type="button" className="btn btn-primary" disabled={pending || attention === "working"} onClick={() => onConfirm({
+              <button type="button" className="btn btn-primary" disabled={pending || attention === "working" || attention === "waiting"} onClick={() => onConfirm({
                 title: t("Close {title}?", { title: card.title }),
                 body: t("Commits what is left in the worktree, merges {branch} into {base}, removes the worktree and deletes {branch}. The project's workspace stays open.", { branch: card.branch ?? "", base: card.base_branch ?? "" }),
                 action: t("Merge and close"),

@@ -22,6 +22,14 @@ describe("cardAttention", () => {
     expect(cardAttention(card(), snapshot(null))).toBe("gone");
   });
 
+  it("reads a pane at rest while its subagents run as waiting, not finished", () => {
+    const waiting = (status: string) => ({ panes: [{ pane_id: "p2", agent_status: status, background_wait: true }], workspaces: [{ workspace_id: "w2", agent_status: status }] }) as never;
+    expect(cardAttention(card(), waiting("done"))).toBe("waiting");
+    expect(cardAttention(card(), waiting("idle"))).toBe("waiting");
+    expect(cardAttention(card(), waiting("blocked"))).toBe("input");
+    expect(cardAttention(card(), waiting("working"))).toBe("working");
+  });
+
   it("says nothing for a parked or closed card, or before the session is read", () => {
     expect(cardAttention(card({ column: "parking" }), snapshot("done"))).toBeNull();
     expect(cardAttention(card({ column: "closed" }), snapshot("done"))).toBeNull();
@@ -29,7 +37,7 @@ describe("cardAttention", () => {
   });
 
   it("asks the user only for input and an unseen finish", () => {
-    expect((["working", "input", "review", "idle", "gone", null] as const).filter(needsUser)).toEqual(["input", "review"]);
+    expect((["working", "waiting", "input", "review", "idle", "gone", null] as const).filter(needsUser)).toEqual(["input", "review"]);
   });
 });
 

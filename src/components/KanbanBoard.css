@@ -156,7 +156,8 @@
   height: 12px;
 }
 
-.kanban-attention.is-working {
+.kanban-attention.is-working,
+.kanban-attention.is-waiting {
   color: var(--status-working);
   border-color: var(--status-working);
   background: var(--status-working-tint);

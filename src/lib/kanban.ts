@@ -4,16 +4,18 @@
  * first message its agent gets.
  */
 import type { KanbanCard } from "../../shared/kanban.ts";
-import type { SessionSnapshot } from "../../shared/protocol.ts";
+import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
 
 /**
- * A started card's state, from its pane's agent: `working` needs nothing yet; `input` (blocked) and
- * `review` (done, not yet seen) need the user; `idle` has been seen and waits; `gone` has no
- * workspace any more (closed outside the board).
+ * A started card's state, from its pane's agent: `working` needs nothing yet, nor does `waiting`
+ * (at rest while subagents or background commands its turn started still run: their end starts
+ * the next turn by itself, lib/status.ts `paneStatus`); `input` (blocked) and `review` (done, not
+ * yet seen) need the user; `idle` has been seen and waits; `gone` has no workspace any more
+ * (closed outside the board).
  */
-export type CardAttention = "working" | "input" | "review" | "idle" | "gone";
+export type CardAttention = "working" | "waiting" | "input" | "review" | "idle" | "gone";
 
-export function cardAttention(card: KanbanCard, snapshot: Pick<SessionSnapshot, "panes" | "workspaces"> | null): CardAttention | null {
+export function cardAttention(card: KanbanCard, snapshot: { panes: Pick<HerdrPane, "pane_id" | "agent_status" | "background_wait">[]; workspaces: Pick<SessionSnapshot["workspaces"][number], "workspace_id" | "agent_status">[] } | null): CardAttention | null {
   if (card.column !== "active" && card.column !== "done") return null;
   if (snapshot === null) return null;
   const pane = card.pane_id ? snapshot.panes.find((item) => item.pane_id === card.pane_id) : undefined;
@@ -22,6 +24,7 @@ export function cardAttention(card: KanbanCard, snapshot: Pick<SessionSnapshot, 
   const status = pane?.agent_status ?? workspace?.agent_status;
   if (status === "working") return "working";
   if (status === "blocked") return "input";
+  if (pane?.background_wait) return "waiting";
   if (status === "done") return "review";
   return "idle";
 }

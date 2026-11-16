@@ -7,6 +7,7 @@ export const KANBAN_JA: Record<string, string> = {
   "In progress": "作業中",
   "Closed": "クローズ済み",
   "Working": "作業中",
+  "Background work running": "サブエージェント等が実行中",
   "Finished · check it": "完了 · 要確認",
   "Checked · waiting": "確認済み · 待機中",
   "Workspace closed": "ワークスペースは閉じています",

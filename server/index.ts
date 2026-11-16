@@ -241,7 +241,7 @@ export function createServer(
   draftTimer.unref();
   const core = createCore({ options: { ...options, stateDir, openCodeState, orderSequence }, devices, preferences, usage, usageLogin, TYPED_SETTLE_MS, KEY_SETTLE_MS, SUBMIT_DEADLINE_MS, SUBMIT_DELAY_MS, DRAFT_CLEAR_WAIT_MS, DRAFT_CLEAR_POLL_MS });
   const { sidecar, serialize, push, logPushError, omo, claudeAgents, plans, clientSnapshot, machines, broadcastAll, collector, queueFirstMessage } = core;
-  const kanbanBoard = kanbanDeps({ queueFirstMessage, sessionChanged: () => broadcastAll({ type: "session-changed" }), shellAgents });
+  const kanbanBoard = kanbanDeps({ queueFirstMessage, sessionChanged: () => broadcastAll({ type: "session-changed" }), shellAgents, sessionSnapshot: clientSnapshot });
   // a card merged and its branch deleted outside the board closes without the board open
   const kanbanTimer = setInterval(() => void kanban.exclusive(() => sweepCards(kanban, kanbanBoard)).catch(() => undefined), 30_000);
   kanbanTimer.unref();
